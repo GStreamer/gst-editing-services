@@ -848,7 +848,6 @@ ges_timeline_pipeline_save_thumbnail (GESTimelinePipeline * self, int width, int
     height, const gchar * format, const gchar * location)
 {
   GstBuffer *b;
-  FILE *fp;
   GstCaps *caps;
   gboolean res = TRUE;
 
@@ -865,13 +864,9 @@ ges_timeline_pipeline_save_thumbnail (GESTimelinePipeline * self, int width, int
     return res;
   }
 
-  /* FIXME : Use standard glib methods */
-  fp = fopen (location, "w+");
-  if (!fwrite (GST_BUFFER_DATA (b), GST_BUFFER_SIZE (b), 1, fp) || ferror (fp)) {
-    res = FALSE;
-  }
-
-  fclose (fp);
+  res =
+      g_file_set_contents (location, (const gchar *) GST_BUFFER_DATA (b),
+      GST_BUFFER_SIZE (b), NULL);
   gst_caps_unref (caps);
   gst_buffer_unref (b);
   return res;
