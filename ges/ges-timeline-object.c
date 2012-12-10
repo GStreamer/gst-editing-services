@@ -1,6 +1,8 @@
 /* GStreamer Editing Services
  * Copyright (C) 2009 Edward Hervey <edward.hervey@collabora.co.uk>
  *               2009 Nokia Corporation
+ *               2012 Collabora Ltd.
+ *                 Author: Sebastian Dröge <sebastian.droege@collabora.co.uk>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -77,8 +79,41 @@ static gboolean ges_timeline_object_set_priority_internal (GESTimelineObject *
 static GESTimelineObject *ges_timeline_object_copy (GESTimelineObject * object,
     gboolean * deep);
 
-G_DEFINE_ABSTRACT_TYPE (GESTimelineObject, ges_timeline_object,
-    G_TYPE_INITIALLY_UNOWNED);
+static void ges_timeline_object_init (GESTimelineObject * self);
+static void ges_timeline_object_class_init (GESTimelineObjectClass * klass);
+static void ges_timeline_object_base_init (gpointer g_klass);
+static gpointer ges_timeline_object_parent_class = NULL;
+
+GType
+ges_timeline_object_get_type (void)
+{
+  static volatile gsize type_id = 0;
+
+  if (g_once_init_enter (&type_id)) {
+    const GTypeInfo type_info = {
+      sizeof (GESTimelineObjectClass),
+      (GBaseInitFunc) ges_timeline_object_base_init,
+      NULL,
+      (GClassInitFunc) ges_timeline_object_class_init,
+      NULL,
+      NULL,
+      sizeof (GESTimelineObject),
+      0,
+      (GInstanceInitFunc) ges_timeline_object_init,
+      NULL
+    };
+    GType tmp_type_id;
+
+    tmp_type_id =
+        g_type_register_static (G_TYPE_INITIALLY_UNOWNED,
+        g_intern_string ("GESTimelineObject"), &type_info,
+        G_TYPE_FLAG_ABSTRACT);
+
+    g_type_add_class_private (tmp_type_id, sizeof (GESTimelineObjectClass));
+    g_once_init_leave (&type_id, tmp_type_id);
+  }
+  return type_id;
+}
 
 /* Mapping of relationship between a TimelineObject and the TrackObjects
  * it controls
@@ -138,6 +173,13 @@ struct _GESTimelineObjectPrivate
 
   /* The formats supported by this TimelineObject */
   GESTrackType supportedformats;
+};
+
+struct _GESTimelineObjectClassPrivate
+{
+  gboolean snaps;
+
+  GESCreateTrackObjectsFullFunc create_track_objects_full;
 };
 
 enum
@@ -227,9 +269,21 @@ ges_timeline_object_set_property (GObject * object, guint property_id,
 }
 
 static void
+ges_timeline_object_base_init (gpointer g_klass)
+{
+  GESTimelineObjectClass *klass = g_klass;
+
+  klass->priv =
+      G_TYPE_CLASS_GET_PRIVATE (klass, GES_TYPE_TIMELINE_OBJECT,
+      GESTimelineObjectClassPrivate);
+}
+
+static void
 ges_timeline_object_class_init (GESTimelineObjectClass * klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  ges_timeline_object_parent_class = g_type_class_peek_parent (klass);
 
   g_type_class_add_private (klass, sizeof (GESTimelineObjectPrivate));
 
@@ -393,7 +447,7 @@ ges_timeline_object_class_init (GESTimelineObjectClass * klass)
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 
   klass->need_fill_track = TRUE;
-  klass->snaps = FALSE;
+  klass->priv->snaps = FALSE;
 }
 
 static void
@@ -408,6 +462,26 @@ ges_timeline_object_init (GESTimelineObject * self)
   self->priv->nb_effects = 0;
   self->priv->is_moving = FALSE;
   self->priv->maxduration = G_MAXUINT64;
+}
+
+void
+ges_timeline_object_class_set_snaps (GESTimelineObjectClass * klass,
+    gboolean snaps)
+{
+  klass->priv->snaps = snaps;
+}
+
+gboolean
+ges_timeline_object_class_get_snaps (GESTimelineObjectClass * klass)
+{
+  return klass->priv->snaps;
+}
+
+void
+ges_timeline_object_class_set_create_track_objects_full (GESTimelineObjectClass
+    * klass, GESCreateTrackObjectsFullFunc func)
+{
+  klass->priv->create_track_objects_full = func;
 }
 
 /**
@@ -513,6 +587,25 @@ ges_timeline_object_create_track_objects_func (GESTimelineObject * object,
     return FALSE;
 
   return ges_track_add_object (track, result);
+}
+
+GList *
+ges_timeline_object_create_track_objects_full (GESTimelineObject * object,
+    GESTrackType type)
+{
+  GESTimelineObjectClass *klass;
+
+  g_return_val_if_fail (GES_IS_TIMELINE_OBJECT (object), NULL);
+
+  klass = GES_TIMELINE_OBJECT_GET_CLASS (object);
+
+  if (!(klass->priv->create_track_objects_full)) {
+    GST_WARNING
+        ("no GESTimelineObject::create_track_objects_full implentation");
+    return NULL;
+  }
+
+  return klass->priv->create_track_objects_full (object, type);
 }
 
 /**
@@ -787,7 +880,7 @@ ges_timeline_object_set_start_internal (GESTimelineObject * object,
 
   /* If the class has snapping enabled and the object is in a timeline,
    * we snap */
-  if (priv->layer && GES_TIMELINE_OBJECT_GET_CLASS (object)->snaps)
+  if (priv->layer && GES_TIMELINE_OBJECT_GET_CLASS (object)->priv->snaps)
     timeline = ges_timeline_layer_get_timeline (object->priv->layer);
   snap = timeline && priv->initiated_move == NULL ? TRUE : FALSE;
 
@@ -896,7 +989,7 @@ ges_timeline_object_set_duration_internal (GESTimelineObject * object,
   GST_DEBUG ("object:%p, duration:%" GST_TIME_FORMAT,
       object, GST_TIME_ARGS (duration));
 
-  if (priv->layer && GES_TIMELINE_OBJECT_GET_CLASS (object)->snaps)
+  if (priv->layer && GES_TIMELINE_OBJECT_GET_CLASS (object)->priv->snaps)
     timeline = ges_timeline_layer_get_timeline (object->priv->layer);
 
   /* If the class has snapping enabled, the object is in a timeline,

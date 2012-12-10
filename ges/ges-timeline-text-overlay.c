@@ -66,6 +66,9 @@ enum
 static GESTrackObject
     * ges_timeline_text_overlay_create_track_object (GESTimelineObject * obj,
     GESTrack * track);
+static GList
+    * ges_timeline_text_overlay_create_track_objects_full (GESTimelineObject *
+    obj, GESTrackType type);
 
 static void
 ges_timeline_text_overlay_get_property (GObject * object, guint property_id,
@@ -207,6 +210,8 @@ ges_timeline_text_overlay_class_init (GESTimelineTextOverlayClass * klass)
   timobj_class->create_track_object =
       ges_timeline_text_overlay_create_track_object;
   timobj_class->need_fill_track = FALSE;
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_timeline_text_overlay_create_track_objects_full);
 
   /**
    * GESTimelineTextOverlay:color
@@ -601,17 +606,16 @@ ges_timeline_text_overlay_get_ypos (GESTimelineTextOverlay * self)
   return self->priv->ypos;
 }
 
-static GESTrackObject *
-ges_timeline_text_overlay_create_track_object (GESTimelineObject * obj,
-    GESTrack * track)
+static GList *
+ges_timeline_text_overlay_create_track_objects_full (GESTimelineObject * obj,
+    GESTrackType type)
 {
-
   GESTimelineTextOverlayPrivate *priv = GES_TIMELINE_TEXT_OVERLAY (obj)->priv;
   GESTrackObject *res = NULL;
 
   GST_DEBUG ("Creating a GESTrackOverlay");
 
-  if (track->type == GES_TRACK_TYPE_VIDEO) {
+  if ((type & GES_TRACK_TYPE_VIDEO)) {
     res = (GESTrackObject *) ges_track_text_overlay_new ();
     GST_DEBUG ("Setting text property");
     ges_track_text_overlay_set_text ((GESTrackTextOverlay *) res, priv->text);
@@ -626,7 +630,24 @@ ges_timeline_text_overlay_create_track_object (GESTimelineObject * obj,
     ges_track_text_overlay_set_ypos ((GESTrackTextOverlay *) res, priv->ypos);
   }
 
-  return res;
+  return res ? g_list_prepend (NULL, res) : NULL;
+}
+
+static GESTrackObject *
+ges_timeline_text_overlay_create_track_object (GESTimelineObject * obj,
+    GESTrack * track)
+{
+  GList *ret;
+  GESTrackObject *trobj;
+
+  ret = ges_timeline_text_overlay_create_track_objects_full (obj, track->type);
+  if (!ret)
+    return NULL;
+
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
+
+  return trobj;
 }
 
 /**

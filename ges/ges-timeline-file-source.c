@@ -57,6 +57,11 @@ enum
 static GESTrackObject
     * ges_timeline_filesource_create_track_object (GESTimelineObject * obj,
     GESTrack * track);
+
+static GList
+    * ges_timeline_filesource_create_track_objects_full (GESTimelineObject *
+    obj, GESTrackType type);
+
 void
 ges_timeline_filesource_set_uri (GESTimelineFileSource * self, gchar * uri);
 
@@ -178,6 +183,9 @@ ges_timeline_filesource_class_init (GESTimelineFileSourceClass * klass)
       ges_timeline_filesource_create_track_object;
   timobj_class->set_max_duration = filesource_set_max_duration;
   timobj_class->need_fill_track = FALSE;
+
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_timeline_filesource_create_track_objects_full);
 }
 
 static void
@@ -356,40 +364,67 @@ ges_timeline_filesource_get_supported_formats (GESTimelineFileSource * self)
   return ges_timeline_object_get_supported_formats (GES_TIMELINE_OBJECT (self));
 }
 
-static GESTrackObject *
-ges_timeline_filesource_create_track_object (GESTimelineObject * obj,
-    GESTrack * track)
+static GList *
+ges_timeline_filesource_create_track_objects_full (GESTimelineObject * obj,
+    GESTrackType type)
 {
   GESTimelineFileSourcePrivate *priv = GES_TIMELINE_FILE_SOURCE (obj)->priv;
-  GESTrackObject *res;
+  GESTrackObject *tr_obj;
+  gint i;
+  GList *res = NULL;
 
-  if (!(ges_timeline_object_get_supported_formats (obj) & track->type)) {
+  if (!(ges_timeline_object_get_supported_formats (obj) & type)) {
     GST_DEBUG ("We don't support this track format");
     return NULL;
   }
 
   if (priv->is_image) {
-    if (track->type != GES_TRACK_TYPE_VIDEO) {
+    if (!(type & GES_TRACK_TYPE_VIDEO)) {
       GST_DEBUG ("Object is still image, not adding any audio source");
-      return NULL;
     } else {
       GST_DEBUG ("Creating a GESTrackImageSource");
-      res = (GESTrackObject *) ges_track_image_source_new (priv->uri);
+      res =
+          g_list_prepend (res,
+          (GESTrackObject *) ges_track_image_source_new (priv->uri));
+    }
+  } else {
+
+    for (i = 0; i < 32; i++) {
+      if ((type & (1 << i)) == 0)
+        continue;
+
+      GST_DEBUG ("Creating a GESTrackFileSource");
+
+      /* FIXME : Implement properly ! */
+      tr_obj = (GESTrackObject *) ges_track_filesource_new (priv->uri);
+      ges_track_object_set_track_type (tr_obj, type);
+
+      /* If mute and track is audio, deactivate the track object */
+      if ((1 << i) == GES_TRACK_TYPE_AUDIO && priv->mute)
+        ges_track_object_set_active (tr_obj, FALSE);
+
+      res = g_list_prepend (res, tr_obj);
     }
   }
 
-  else {
-    GST_DEBUG ("Creating a GESTrackFileSource");
-
-    /* FIXME : Implement properly ! */
-    res = (GESTrackObject *) ges_track_filesource_new (priv->uri);
-
-    /* If mute and track is audio, deactivate the track object */
-    if (track->type == GES_TRACK_TYPE_AUDIO && priv->mute)
-      ges_track_object_set_active (res, FALSE);
-  }
-
   return res;
+}
+
+static GESTrackObject *
+ges_timeline_filesource_create_track_object (GESTimelineObject * obj,
+    GESTrack * track)
+{
+  GList *ret;
+  GESTrackObject *trobj;
+
+  ret = ges_timeline_filesource_create_track_objects_full (obj, track->type);
+  if (!ret)
+    return NULL;
+
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
+
+  return trobj;
 }
 
 /**

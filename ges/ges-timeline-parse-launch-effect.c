@@ -59,6 +59,10 @@ static GESTrackObject
     * ges_tl_parse_launch_effect_create_track_obj (GESTimelineObject * self,
     GESTrack * track);
 
+static GList
+    * ges_tl_parse_launch_effect_create_track_objs_full (GESTimelineObject *
+    self, GESTrackType type);
+
 static void
 ges_timeline_parse_launch_effect_finalize (GObject * object)
 {
@@ -155,6 +159,8 @@ ges_timeline_parse_launch_effect_class_init (GESTimelineParseLaunchEffectClass *
   timobj_class->create_track_object =
       ges_tl_parse_launch_effect_create_track_obj;
   timobj_class->need_fill_track = FALSE;
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_tl_parse_launch_effect_create_track_objs_full);
 }
 
 static void
@@ -166,34 +172,59 @@ ges_timeline_parse_launch_effect_init (GESTimelineParseLaunchEffect * self)
 
 }
 
-static GESTrackObject *
-ges_tl_parse_launch_effect_create_track_obj (GESTimelineObject * self,
-    GESTrack * track)
+static GList *
+ges_tl_parse_launch_effect_create_track_objs_full (GESTimelineObject * self,
+    GESTrackType type)
 {
   GESTimelineParseLaunchEffect *effect =
       GES_TIMELINE_PARSE_LAUNCH_EFFECT (self);
+  GESTrackObject *tr_obj;
+  GList *res = NULL;
 
-  if (track->type == GES_TRACK_TYPE_VIDEO) {
+  if ((type & GES_TRACK_TYPE_VIDEO)) {
     if (effect->priv->video_bin_description != NULL) {
       GST_DEBUG ("Creating a GESTrackEffect for the video track");
-      return GES_TRACK_OBJECT (ges_track_parse_launch_effect_new
-          (effect->priv->video_bin_description));
+      tr_obj =
+          GES_TRACK_OBJECT (ges_track_parse_launch_effect_new (effect->
+              priv->video_bin_description));
+      ges_track_object_set_track_type (tr_obj, GES_TRACK_TYPE_VIDEO);
+      res = g_list_prepend (res, tr_obj);
     }
     GST_DEBUG ("Can't create the track Object, the"
         "video_bin_description is not set");
   }
-  if (track->type == GES_TRACK_TYPE_AUDIO) {
+
+  if ((type & GES_TRACK_TYPE_AUDIO)) {
     if (effect->priv->audio_bin_description != NULL) {
       GST_DEBUG ("Creating a GESTrackEffect for the audio track");
-      return GES_TRACK_OBJECT (ges_track_parse_launch_effect_new
-          (effect->priv->audio_bin_description));
+      tr_obj =
+          GES_TRACK_OBJECT (ges_track_parse_launch_effect_new (effect->
+              priv->audio_bin_description));
+      ges_track_object_set_track_type (tr_obj, GES_TRACK_TYPE_AUDIO);
+      res = g_list_prepend (res, tr_obj);
     }
     GST_DEBUG ("Can't create the track Object, the"
         "audio_bin_description is not set");
   }
 
-  GST_WARNING ("Effect doesn't handle this track type");
-  return NULL;
+  return res;
+}
+
+static GESTrackObject *
+ges_tl_parse_launch_effect_create_track_obj (GESTimelineObject * self,
+    GESTrack * track)
+{
+  GList *ret;
+  GESTrackObject *trobj;
+
+  ret = ges_tl_parse_launch_effect_create_track_objs_full (self, track->type);
+  if (!ret)
+    return NULL;
+
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
+
+  return trobj;
 }
 
 /**

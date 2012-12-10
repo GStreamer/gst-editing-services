@@ -58,6 +58,9 @@ enum
 static GESTrackObject
     * ges_timeline_test_source_create_track_object (GESTimelineObject * obj,
     GESTrack * track);
+static GList
+    * ges_timeline_test_source_create_track_objects_full (GESTimelineObject *
+    obj, GESTrackType type);
 
 static void
 ges_timeline_test_source_get_property (GObject * object, guint property_id,
@@ -162,6 +165,9 @@ ges_timeline_test_source_class_init (GESTimelineTestSourceClass * klass)
   timobj_class->create_track_object =
       ges_timeline_test_source_create_track_object;
   timobj_class->need_fill_track = FALSE;
+
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_timeline_test_source_create_track_objects_full);
 }
 
 static void
@@ -349,34 +355,54 @@ ges_timeline_test_source_get_volume (GESTimelineTestSource * self)
   return self->priv->volume;
 }
 
+static GList *
+ges_timeline_test_source_create_track_objects_full (GESTimelineObject * obj,
+    GESTrackType type)
+{
+  GESTimelineTestSourcePrivate *priv = GES_TIMELINE_TEST_SOURCE (obj)->priv;
+  GESTrackObject *tr_obj;
+  GList *res = NULL;
+
+  GST_DEBUG ("Creating a GESTrackTestSource");
+
+  if ((type & GES_TRACK_TYPE_VIDEO)) {
+    tr_obj = (GESTrackObject *) ges_track_video_test_source_new ();
+    ges_track_video_test_source_set_pattern (
+        (GESTrackVideoTestSource *) tr_obj, priv->vpattern);
+    res = g_list_prepend (res, tr_obj);
+  }
+
+  if ((type & GES_TRACK_TYPE_AUDIO)) {
+    tr_obj = (GESTrackObject *) ges_track_audio_test_source_new ();
+
+    if (priv->mute)
+      ges_track_object_set_active (tr_obj, FALSE);
+
+    ges_track_audio_test_source_set_freq ((GESTrackAudioTestSource *) tr_obj,
+        priv->freq);
+    ges_track_audio_test_source_set_volume ((GESTrackAudioTestSource *) tr_obj,
+        priv->volume);
+    res = g_list_prepend (res, tr_obj);
+  }
+
+  return res;
+}
+
 static GESTrackObject *
 ges_timeline_test_source_create_track_object (GESTimelineObject * obj,
     GESTrack * track)
 {
-  GESTimelineTestSourcePrivate *priv = GES_TIMELINE_TEST_SOURCE (obj)->priv;
-  GESTrackObject *res = NULL;
+  GList *ret;
+  GESTrackObject *trobj;
 
-  GST_DEBUG ("Creating a GESTrackTestSource");
+  ret = ges_timeline_test_source_create_track_objects_full (obj, track->type);
+  if (!ret)
+    return NULL;
 
-  if (track->type == GES_TRACK_TYPE_VIDEO) {
-    res = (GESTrackObject *) ges_track_video_test_source_new ();
-    ges_track_video_test_source_set_pattern (
-        (GESTrackVideoTestSource *) res, priv->vpattern);
-  }
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
 
-  else if (track->type == GES_TRACK_TYPE_AUDIO) {
-    res = (GESTrackObject *) ges_track_audio_test_source_new ();
-
-    if (priv->mute)
-      ges_track_object_set_active (res, FALSE);
-
-    ges_track_audio_test_source_set_freq ((GESTrackAudioTestSource *) res,
-        priv->freq);
-    ges_track_audio_test_source_set_volume ((GESTrackAudioTestSource *) res,
-        priv->volume);
-  }
-
-  return res;
+  return trobj;
 }
 
 /**

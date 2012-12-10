@@ -46,6 +46,7 @@ G_BEGIN_DECLS
   (G_TYPE_INSTANCE_GET_CLASS ((obj), GES_TYPE_TIMELINE_OBJECT, GESTimelineObjectClass))
 
 typedef struct _GESTimelineObjectPrivate GESTimelineObjectPrivate;
+typedef struct _GESTimelineObjectClassPrivate GESTimelineObjectClassPrivate;
 
 /**
  * GESFillTrackObjectFunc:
@@ -109,6 +110,9 @@ typedef GESTrackObject* (*GESCreateTrackObjectFunc) (GESTimelineObject * object,
  */
 typedef gboolean (*GESCreateTrackObjectsFunc) (GESTimelineObject * object,
                                             GESTrack *track);
+
+
+typedef GList * (*GESCreateTrackObjectsFullFunc) (GESTimelineObject * object, GESTrackType type);
 
 /**
  * GES_TIMELINE_OBJECT_START:
@@ -205,7 +209,6 @@ struct _GESTimelineObjectClass {
   /* FIXME : might need a release_track_object */
   GESFillTrackObjectFunc  fill_track_object;
   gboolean need_fill_track;
-  gboolean snaps;
 
   void (*track_object_added)    (GESTimelineObject *object,
                                 GESTrackObject *tck_object);
@@ -215,11 +218,18 @@ struct _GESTimelineObjectClass {
                                  guint64 maxduration);
 
   /*< private >*/
+  GESTimelineObjectClassPrivate *priv;
+
   /* Padding for API extension */
   gpointer _ges_reserved[GES_PADDING - 4];
 };
 
 GType ges_timeline_object_get_type          (void);
+
+void ges_timeline_object_class_set_snaps (GESTimelineObjectClass * klass, gboolean snaps);
+gboolean ges_timeline_object_class_get_snaps (GESTimelineObjectClass * klass);
+
+void ges_timeline_object_class_set_create_track_objects_full (GESTimelineObjectClass * klass, GESCreateTrackObjectsFullFunc func);
 
 /* Setters */
 void ges_timeline_object_set_start          (GESTimelineObject * object,
@@ -239,6 +249,10 @@ void ges_timeline_object_set_layer          (GESTimelineObject * object,
 				       GESTimelineLayer * layer);
 
 /* TrackObject handling */
+GList *
+ges_timeline_object_create_track_objects_full     (GESTimelineObject * object,
+					  GESTrackType type);
+
 GESTrackObject *
 ges_timeline_object_create_track_object     (GESTimelineObject * object,
 					  GESTrack * track);

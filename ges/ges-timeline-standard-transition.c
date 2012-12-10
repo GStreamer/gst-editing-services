@@ -55,6 +55,8 @@ G_DEFINE_TYPE (GESTimelineStandardTransition, ges_timeline_standard_transition,
 
 static GESTrackObject *ges_tl_transition_create_track_object (GESTimelineObject
     * self, GESTrack * track);
+static GList *ges_tl_transition_create_track_objects_full (GESTimelineObject
+    * self, GESTrackType type);
 static void
 ges_timeline_standard_transition_track_object_added (GESTimelineObject * obj,
     GESTrackObject * tckobj);
@@ -142,6 +144,9 @@ ges_timeline_standard_transition_class_init (GESTimelineStandardTransitionClass
       ges_timeline_standard_transition_track_object_added;
   timobj_class->track_object_released =
       ges_timeline_standard_transition_track_object_released;
+
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_tl_transition_create_track_objects_full);
 }
 
 static void
@@ -185,19 +190,20 @@ ges_timeline_standard_transition_track_object_added (GESTimelineObject * obj,
   }
 }
 
-static GESTrackObject *
-ges_tl_transition_create_track_object (GESTimelineObject * obj,
-    GESTrack * track)
+static GList *
+ges_tl_transition_create_track_objects_full (GESTimelineObject
+    * obj, GESTrackType type)
 {
   GESTimelineStandardTransition *transition =
       (GESTimelineStandardTransition *) obj;
-  GESTrackObject *res = NULL;
+  GList *res = NULL;
   GESTrackType supportedformats;
 
   GST_DEBUG ("Creating a GESTrackTransition");
 
   supportedformats = ges_timeline_object_get_supported_formats (obj);
-  if (track->type == GES_TRACK_TYPE_VIDEO) {
+
+  if ((type & GES_TRACK_TYPE_VIDEO)) {
     if (supportedformats == GES_TRACK_TYPE_UNKNOWN ||
         supportedformats & GES_TRACK_TYPE_VIDEO) {
       GESTrackVideoTransition *trans;
@@ -205,17 +211,21 @@ ges_tl_transition_create_track_object (GESTimelineObject * obj,
       trans = ges_track_video_transition_new ();
       ges_track_video_transition_set_transition_type (trans, transition->vtype);
 
-      res = GES_TRACK_OBJECT (trans);
+      res = g_list_prepend (res, GES_TRACK_OBJECT (trans));
     } else {
       GST_DEBUG ("Not creating transition as video track not on"
           " supportedformats");
     }
 
-  } else if (track->type == GES_TRACK_TYPE_AUDIO) {
+  }
+
+  if ((type & GES_TRACK_TYPE_AUDIO)) {
 
     if (supportedformats == GES_TRACK_TYPE_UNKNOWN ||
         supportedformats & GES_TRACK_TYPE_AUDIO)
-      res = GES_TRACK_OBJECT (ges_track_audio_transition_new ());
+      res =
+          g_list_prepend (res,
+          GES_TRACK_OBJECT (ges_track_audio_transition_new ()));
     else
       GST_DEBUG ("Not creating transition as audio track"
           " not on supportedformats");
@@ -224,6 +234,24 @@ ges_tl_transition_create_track_object (GESTimelineObject * obj,
     GST_WARNING ("Transitions don't handle this track type");
 
   return res;
+
+}
+
+static GESTrackObject *
+ges_tl_transition_create_track_object (GESTimelineObject * obj,
+    GESTrack * track)
+{
+  GList *ret;
+  GESTrackObject *trobj;
+
+  ret = ges_tl_transition_create_track_objects_full (obj, track->type);
+  if (!ret)
+    return NULL;
+
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
+
+  return trobj;
 }
 
 /**

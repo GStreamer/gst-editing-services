@@ -74,6 +74,10 @@ static GESTrackObject
     * ges_timeline_title_source_create_track_object (GESTimelineObject * obj,
     GESTrack * track);
 
+static GList
+    * ges_timeline_title_source_create_track_objects_full (GESTimelineObject *
+    obj, GESTrackType type);
+
 static void
 ges_timeline_title_source_track_object_added (GESTimelineObject * obj,
     GESTrackObject * tckobj);
@@ -236,6 +240,9 @@ ges_timeline_title_source_class_init (GESTimelineTitleSourceClass * klass)
       ges_timeline_title_source_track_object_added;
   timobj_class->track_object_released =
       ges_timeline_title_source_track_object_released;
+
+  ges_timeline_object_class_set_create_track_objects_full (timobj_class,
+      ges_timeline_title_source_create_track_objects_full);
 
   /**
    * GESTimelineTitleSource:color
@@ -647,17 +654,17 @@ ges_timeline_title_source_track_object_added (GESTimelineObject * obj,
   }
 }
 
-static GESTrackObject *
-ges_timeline_title_source_create_track_object (GESTimelineObject * obj,
-    GESTrack * track)
+static GList *
+ges_timeline_title_source_create_track_objects_full (GESTimelineObject * obj,
+    GESTrackType type)
 {
-
   GESTimelineTitleSourcePrivate *priv = GES_TIMELINE_TITLE_SOURCE (obj)->priv;
   GESTrackObject *res = NULL;
+  GList *l = NULL;
 
   GST_DEBUG ("Creating a GESTrackTitleSource");
 
-  if (track->type == GES_TRACK_TYPE_VIDEO) {
+  if ((type & GES_TRACK_TYPE_VIDEO)) {
     res = (GESTrackObject *) ges_track_title_source_new ();
     GST_DEBUG ("Setting text property");
     ges_track_title_source_set_text ((GESTrackTitleSource *) res, priv->text);
@@ -670,15 +677,34 @@ ges_timeline_title_source_create_track_object (GESTimelineObject * obj,
     ges_track_title_source_set_color ((GESTrackTitleSource *) res, priv->color);
     ges_track_title_source_set_xpos ((GESTrackTitleSource *) res, priv->xpos);
     ges_track_title_source_set_ypos ((GESTrackTitleSource *) res, priv->ypos);
+    l = g_list_prepend (l, res);
   }
 
-  else if (track->type == GES_TRACK_TYPE_AUDIO) {
+  if ((type & GES_TRACK_TYPE_AUDIO)) {
     res = (GESTrackObject *) ges_track_audio_test_source_new ();
     if (priv->mute)
       ges_track_object_set_active (res, FALSE);
+    l = g_list_prepend (l, res);
   }
 
-  return res;
+  return l;
+}
+
+static GESTrackObject *
+ges_timeline_title_source_create_track_object (GESTimelineObject * obj,
+    GESTrack * track)
+{
+  GList *ret;
+  GESTrackObject *trobj;
+
+  ret = ges_timeline_title_source_create_track_objects_full (obj, track->type);
+  if (!ret)
+    return NULL;
+
+  trobj = g_object_ref (ret->data);
+  g_list_free_full (ret, g_object_unref);
+
+  return trobj;
 }
 
 /**

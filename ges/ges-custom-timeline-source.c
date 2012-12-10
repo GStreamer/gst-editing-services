@@ -50,7 +50,24 @@ static GESTrackObject *
 ges_custom_timeline_source_create_track_object (GESTimelineObject * obj,
     GESTrack * track)
 {
-  return g_object_new (GES_TYPE_TRACK_SOURCE, NULL);
+  return g_object_new (GES_TYPE_TRACK_SOURCE, "track-type", track->type, NULL);
+}
+
+static GList *
+ges_custom_timeline_source_create_track_objects_full (GESTimelineObject * obj,
+    GESTrackType type)
+{
+  gint i;
+  GList *res = NULL;
+
+  for (i = 0; i < 32; i++) {
+    if (((1 << i) & type)) {
+      res = g_list_prepend (res, g_object_new (GES_TYPE_TRACK_SOURCE,
+              "track-type", (1 << i), NULL));
+    }
+  }
+
+  return res;
 }
 
 static void
@@ -63,6 +80,9 @@ ges_custom_timeline_source_class_init (GESCustomTimelineSourceClass * klass)
   tlobj_class->fill_track_object = ges_custom_timeline_source_fill_track_object;
   tlobj_class->create_track_object =
       ges_custom_timeline_source_create_track_object;
+
+  ges_timeline_object_class_set_create_track_objects_full (tlobj_class,
+      ges_custom_timeline_source_create_track_objects_full);
 }
 
 static void
