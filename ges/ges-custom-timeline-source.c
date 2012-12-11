@@ -106,7 +106,8 @@ ges_custom_timeline_source_new (GESFillTrackObjectUserFunc func,
 {
   GESCustomTimelineSource *src;
 
-  src = g_object_new (GES_TYPE_CUSTOM_TIMELINE_SOURCE, NULL);
+  src = g_object_new (GES_TYPE_CUSTOM_TIMELINE_SOURCE, "supported-formats",
+      GES_TRACK_TYPE_CUSTOM, NULL);
   src->priv->filltrackobjectfunc = func;
   src->priv->user_data = user_data;
 
