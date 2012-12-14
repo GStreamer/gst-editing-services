@@ -576,21 +576,19 @@ typedef struct
   GESTrack **tr1, **tr2;
 } SelectTracksData;
 
-static GValueArray *
+static GArray *
 select_tracks_cb (GESTimeline * timeline, GESTimelineObject * tobj,
     GESTrackObject * trobj, SelectTracksData * st_data)
 {
-  GValueArray *ret = g_value_array_new (1);
-  GValue v = { 0, };
+  GESTrack *track;
 
-  g_value_init (&v, GES_TYPE_TRACK);
-  g_value_set_object (&v,
-      (tobj ==
-          (GESTimelineObject *) * st_data->o2) ? *st_data->tr2 : *st_data->tr1);
-  g_value_array_append (ret, &v);
-  g_value_unset (&v);
+  GArray *ret = g_array_new (FALSE, FALSE, sizeof (GESTrack *));
+  track = (tobj == (GESTimelineObject *) * st_data->o2) ? *st_data->tr2 :
+      *st_data->tr1;
 
-  return ret;
+  gst_object_ref (track);
+
+  return g_array_append_val (ret, track);
 }
 
 GST_START_TEST (test_ges_timeline_multiple_tracks)
