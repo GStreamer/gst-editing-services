@@ -221,7 +221,13 @@ struct _GESTimelineObjectClass {
   GESTimelineObjectClassPrivate *priv;
 
   /* Padding for API extension */
+  /* FIXME: Add this again when breaking ABI but
+   * 0-sized arrays are not valid C and compilers
+   * complain about it
+   */
+#if 0
   gpointer _ges_reserved[GES_PADDING - 4];
+#endif
 };
 
 GType ges_timeline_object_get_type          (void);
